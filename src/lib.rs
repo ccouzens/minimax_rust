@@ -82,6 +82,63 @@ impl MinMaxGame for TicTacToeGame {
     }
 }
 
+pub mod min_max_game_strategy {
+    use MinMaxGame;
+    pub fn minimax<G: MinMaxGame>(game: &G, player: bool) -> i8 {
+        match game.finished() {
+            Some(score) => score,
+            None => {
+                let moves = game.moves(player);
+                let following_scores = moves.iter().map(|g| minimax::<G>(&g, !player));
+                if player {
+                    following_scores.max()
+                } else {
+                    following_scores.min()
+                }.unwrap_or(0)
+            }
+        }
+    }
+
+    pub fn next<G: MinMaxGame>(game: &G, player: bool) -> Option<G> {
+        match game.finished() {
+            Some(_) => None,
+            None => {
+                let moves = game.moves(player).into_iter();
+                let key = |game: &G| minimax::<G>(game, !player);
+                if player {
+                    moves.max_by_key(key)
+                } else {
+                    moves.min_by_key(key)
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod min_max_strategy_tests {
+    #[test]
+    fn finishing_move_x() {
+        use min_max_game_strategy::next;
+        use TicTacToeGame;
+
+        let g = "<O O┃ O ┃X X>".parse::<TicTacToeGame>().unwrap();
+        let e = "<O O┃ O ┃XXX>".parse().unwrap();
+        assert_eq!(next(&g, false), Some(e));
+    }
+
+    #[test]
+    fn finishing_move_o() {
+        use min_max_game_strategy::next;
+        use TicTacToeGame;
+
+        let g = "<O O┃   ┃X X>".parse::<TicTacToeGame>().unwrap();
+        let e = "<OOO┃   ┃X X>".parse().unwrap();
+        assert_eq!(next(&g, true), Some(e));
+    }
+
+}
+
 #[cfg(test)]
 mod tic_tac_toe_game_tests {
     #[test]
