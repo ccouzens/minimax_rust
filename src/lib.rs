@@ -84,17 +84,50 @@ impl MinMaxGame for TicTacToeGame {
 
 pub mod min_max_game_strategy {
     use MinMaxGame;
-    pub fn minimax<G: MinMaxGame>(game: &G, player: bool) -> i8 {
+
+    fn best_comparison(a: Option<i8>, b: Option<i8>, maximise: bool) -> Option<i8> {
+        match (a, b) {
+            (None, None) => None,
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (Some(a), Some(b)) => Some(if maximise {
+                std::cmp::max(a, b)
+            } else {
+                std::cmp::min(a, b)
+            }),
+        }
+    }
+
+    pub fn minimax<G: MinMaxGame>(
+        game: &G,
+        mut alpha: Option<i8>,
+        mut beta: Option<i8>,
+        player: bool,
+    ) -> i8 {
         match game.finished() {
             Some(score) => score,
             None => {
                 let moves = game.moves(player);
-                let following_scores = moves.iter().map(|g| minimax::<G>(&g, !player));
-                if player {
-                    following_scores.max()
-                } else {
-                    following_scores.min()
-                }.unwrap_or(0)
+                let mut value = None;
+                for r#move in moves {
+                    value = best_comparison(
+                        value,
+                        Some(minimax(&r#move, alpha, beta, !player)),
+                        player,
+                    );
+                    if player {
+                        alpha = best_comparison(alpha, value, player);
+                    } else {
+                        beta = best_comparison(beta, value, player);
+                    }
+
+                    if let (Some(alpha), Some(beta)) = (alpha, beta) {
+                        if alpha >= beta {
+                            break;
+                        }
+                    }
+                }
+                value.unwrap_or(0)
             }
         }
     }
@@ -104,7 +137,7 @@ pub mod min_max_game_strategy {
             Some(_) => None,
             None => {
                 let moves = game.moves(player).into_iter();
-                let key = |game: &G| minimax::<G>(game, !player);
+                let key = |game: &G| minimax::<G>(game, None, None, !player);
                 if player {
                     moves.max_by_key(key)
                 } else {
@@ -136,7 +169,6 @@ mod min_max_strategy_tests {
         let e = "<OOO┃   ┃X X>".parse().unwrap();
         assert_eq!(next(&g, true), Some(e));
     }
-
 }
 
 #[cfg(test)]
