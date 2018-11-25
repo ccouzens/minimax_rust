@@ -103,18 +103,23 @@ pub mod min_max_game_strategy {
         mut alpha: Option<i8>,
         mut beta: Option<i8>,
         player: bool,
-    ) -> i8 {
+    ) -> (i8, Option<G>) {
         match game.finished() {
-            Some(score) => score,
+            Some(score) => (score, None),
             None => {
                 let moves = game.moves(player);
                 let mut value = None;
+                let mut best_move = None;
                 for r#move in moves {
+                    let old_value = value;
                     value = best_comparison(
                         value,
-                        Some(minimax(&r#move, alpha, beta, !player)),
+                        Some(minimax(&r#move, alpha, beta, !player).0),
                         player,
                     );
+                    if old_value != value {
+                        best_move = Some(r#move);
+                    }
                     if player {
                         alpha = best_comparison(alpha, value, player);
                     } else {
@@ -127,24 +132,13 @@ pub mod min_max_game_strategy {
                         }
                     }
                 }
-                value.unwrap_or(0)
+                (value.unwrap_or(0), best_move)
             }
         }
     }
 
     pub fn next<G: MinMaxGame>(game: &G, player: bool) -> Option<G> {
-        match game.finished() {
-            Some(_) => None,
-            None => {
-                let moves = game.moves(player).into_iter();
-                let key = |game: &G| minimax::<G>(game, None, None, !player);
-                if player {
-                    moves.max_by_key(key)
-                } else {
-                    moves.min_by_key(key)
-                }
-            }
-        }
+        minimax(game, None, None, player).1
     }
 }
 
