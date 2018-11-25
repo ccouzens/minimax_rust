@@ -85,7 +85,7 @@ impl MinMaxGame for TicTacToeGame {
 pub mod min_max_game_strategy {
     use MinMaxGame;
 
-    fn best_comparison(a: Option<i8>, b: Option<i8>, maximise: bool) -> Option<i8> {
+    fn best_pick(a: Option<i8>, b: Option<i8>, maximise: bool) -> Option<i8> {
         match (a, b) {
             (None, None) => None,
             (Some(a), None) => Some(a),
@@ -112,7 +112,7 @@ pub mod min_max_game_strategy {
                 let mut best_move = None;
                 for r#move in moves {
                     let old_value = value;
-                    value = best_comparison(
+                    value = best_pick(
                         value,
                         Some(minimax(&r#move, alpha, beta, !player).0),
                         player,
@@ -121,9 +121,9 @@ pub mod min_max_game_strategy {
                         best_move = Some(r#move);
                     }
                     if player {
-                        alpha = best_comparison(alpha, value, player);
+                        alpha = best_pick(alpha, value, player);
                     } else {
-                        beta = best_comparison(beta, value, player);
+                        beta = best_pick(beta, value, player);
                     }
 
                     if let (Some(alpha), Some(beta)) = (alpha, beta) {
