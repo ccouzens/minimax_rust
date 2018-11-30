@@ -130,7 +130,7 @@ impl MinMaxGame for Connect4Game {
     fn moves(&self, player: bool) -> Vec<Self> {
         let board = self.board;
         let mut moves = Vec::with_capacity(7);
-        for column in 0..7 {
+        for column in [3, 2, 4, 1, 5, 0, 6].iter().cloned() {
             for row in (0..6).rev() {
                 if board[row][column] == None {
                     let mut new_game = self.clone();
