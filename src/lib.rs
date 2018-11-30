@@ -3,6 +3,147 @@ pub trait MinMaxGame: Sized {
     fn moves(&self, player: bool) -> Vec<Self>;
 }
 
+#[derive(Default, Clone)]
+struct Connect4Game {
+    board: [[Option<bool>; 7]; 6],
+}
+
+impl std::str::FromStr for Connect4Game {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, (Self::Err)> {
+        let mut squares = s.chars().filter_map(|c| match c {
+            ' ' => Some(None),
+            'O' => Some(Some(true)),
+            'X' => Some(Some(false)),
+            _ => None,
+        });
+        let mut game = Connect4Game::default();
+        for row in (0..6).rev() {
+            for column in 0..7 {
+                game.board[row][column] = squares.next().unwrap_or(None);
+            }
+        }
+        Ok(game)
+    }
+}
+
+impl std::fmt::Debug for Connect4Game {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "<")?;
+        for row in (0..6).rev() {
+            for col in 0..7 {
+                let square = match self.board[row][col] {
+                    None => ' ',
+                    Some(true) => 'O',
+                    Some(false) => 'X',
+                };
+                write!(f, "{}", square)?;
+            }
+            if row > 0 {
+                write!(f, "┃")?;
+            }
+        }
+        write!(f, ">")
+    }
+}
+
+impl MinMaxGame for Connect4Game {
+    fn finished(&self) -> Option<i8> {
+        let board = self.board;
+
+        for (value, player) in [(1, Some(true)), (-1, Some(false))].iter().cloned() {
+            let vertical_search = || {
+                for column in 0..7 {
+                    let mut count = 0;
+                    for row in board.iter() {
+                        let square = row[column];
+                        count = if square == player { count + 1 } else { 0 };
+                        if count >= 4 {
+                            return Some(value);
+                        }
+                    }
+                }
+                None
+            };
+            let horizontal_search = || {
+                for row in board.iter() {
+                    let mut count = 0;
+                    for square in row.iter().cloned() {
+                        count = if square == player { count + 1 } else { 0 };
+                        if count >= 4 {
+                            return Some(value);
+                        }
+                    }
+                }
+                None
+            };
+            let north_east_diagonal_search = || {
+                for diagonal in 3..9usize {
+                    let mut count = 0;
+                    let mut column = diagonal.saturating_sub(5);
+                    while column < 7 && column <= diagonal {
+                        let row = diagonal - column;
+                        let square = board[row][column];
+
+                        count = if square == player { count + 1 } else { 0 };
+                        if count >= 4 {
+                            return Some(value);
+                        }
+                        column += 1;
+                    }
+                }
+                None
+            };
+            let north_west_diagonal_search = || {
+                for diagonal in 3..9usize {
+                    let mut count = 0;
+                    let mut column = diagonal.saturating_sub(5);
+                    let mut row = 5usize.saturating_sub(diagonal);
+                    while column < 7 && row < 6 {
+                        let square = board[row][column];
+                        count = if square == player { count + 1 } else { 0 };
+                        if count >= 4 {
+                            return Some(value);
+                        }
+
+                        row += 1;
+                        column += 1;
+                    }
+                }
+                None
+            };
+            if let Some(result) = vertical_search()
+                .or_else(horizontal_search)
+                .or_else(north_east_diagonal_search)
+                .or_else(north_west_diagonal_search)
+            {
+                return Some(result);
+            };
+        }
+        if (0..42).all(|i| board[i / 7][i % 7].is_some()) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    fn moves(&self, player: bool) -> Vec<Self> {
+        let board = self.board;
+        let mut moves = Vec::with_capacity(7);
+        for column in 0..7 {
+            for row in (0..6).rev() {
+                if board[row][column] == None {
+                    let mut new_game = self.clone();
+                    new_game.board[row][column] = Some(player);
+                    moves.push(new_game);
+                    break;
+                }
+            }
+        }
+        moves
+    }
+}
+
 #[derive(Clone, Default, PartialEq)]
 struct TicTacToeGame {
     board: [[Option<bool>; 3]; 3],
@@ -143,6 +284,110 @@ pub mod min_max_game_strategy {
 }
 
 #[cfg(test)]
+mod connect_4_tests {
+    #[test]
+    fn from_str_debug() {
+        use Connect4Game;
+        for s in [
+            "<       ┃       ┃       ┃       ┃       ┃       >",
+            "<X   O  ┃       ┃       ┃       ┃       ┃       >",
+        ]
+            .into_iter()
+        {
+            let g = s.parse::<Connect4Game>().unwrap();
+            assert_eq!(&format!("{:?}", g), s);
+        }
+    }
+
+    #[test]
+    fn finished() {
+        use Connect4Game;
+        use MinMaxGame;
+
+        let f = |string: &str| string.parse::<Connect4Game>().unwrap().finished();
+
+        // Not finished
+        assert_eq!(
+            f("<X   O  ┃       ┃       ┃       ┃       ┃       >"),
+            None
+        );
+        // No winner
+        assert_eq!(
+            f("<OOOXXXO┃XXXOOOX┃OOOXXXO┃XXXOOOX┃OOOXXXO┃XXXOOOX>"),
+            Some(0)
+        );
+
+        // Vertical
+        assert_eq!(
+            f("<O   XXX┃O      ┃O      ┃O      ┃       ┃       >"),
+            Some(1)
+        );
+
+        // Horizontal
+        assert_eq!(
+            f("<OOOOXXX┃       ┃       ┃       ┃       ┃       >"),
+            Some(1)
+        );
+
+        // First North East Diagonal
+        assert_eq!(
+            f("<OXXOX  ┃XOOXX  ┃OXXO   ┃ OOX   ┃  OO   ┃   O   >"),
+            Some(1)
+        );
+
+        // Diagonal North East left border
+        assert_eq!(
+            f("<OXXX   ┃ OOX   ┃ OOX   ┃   O   ┃       ┃       >"),
+            Some(1)
+        );
+
+        // Last Diagonal North East right border
+        assert_eq!(
+            f("<   OXXX┃   XOOX┃     OO┃      O┃       ┃       >"),
+            Some(1)
+        );
+
+        // First Diaonal North West Left border
+        assert_eq!(
+            f("<XXXOX  ┃XOO    ┃OO     ┃O      ┃       ┃       >"),
+            Some(1)
+        );
+
+        // Last Diagonal North West right border
+        assert_eq!(
+            f("< X XXXO┃   XOOX┃   OXXO┃   XOO ┃   OO  ┃   O   >"),
+            Some(1)
+        );
+
+        // Other winner
+        assert_eq!(
+            f("<OO XXXX┃OO     ┃       ┃       ┃       ┃       >"),
+            Some(-1)
+        )
+    }
+
+    #[test]
+    fn complete_game() {
+        use min_max_game_strategy::next;
+        use Connect4Game;
+
+        let mut game = "<XXXOOO ┃XOO    ┃OX     ┃XO     ┃XX     ┃OO     >"
+            .parse::<Connect4Game>()
+            .unwrap();
+        let mut player = true;
+        loop {
+            match next(&game, player) {
+                Some(g) => game = g,
+                None => break,
+            }
+            println!("{:?}", game);
+            player = !player;
+        }
+        panic!("blah")
+    }
+}
+
+#[cfg(test)]
 mod min_max_strategy_tests {
     #[test]
     fn finishing_move_x() {
@@ -163,6 +408,24 @@ mod min_max_strategy_tests {
         let e = "<OOO┃   ┃X X>".parse().unwrap();
         assert_eq!(next(&g, true), Some(e));
     }
+
+    // #[test]
+    // fn complete_game() {
+    //     use min_max_game_strategy::next;
+    //     use TicTacToeGame;
+
+    //     let mut game = TicTacToeGame::default();
+    //     let mut player = true;
+    //     loop {
+    //         match next(&game, player) {
+    //             Some(g) => game = g,
+    //             None => break,
+    //         }
+    //         println!("{:?}", game);
+    //         player = !player;
+    //     }
+    //     panic!("blah")
+    // }
 }
 
 #[cfg(test)]
